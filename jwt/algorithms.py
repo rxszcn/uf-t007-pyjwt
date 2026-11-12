@@ -474,7 +474,11 @@ class HMACAlgorithm(Algorithm):
         if obj.get("kty") != "oct":
             raise InvalidKeyError("Not an HMAC key")
 
-        key_bytes = base64url_decode(obj["k"])
+        key = obj.get("k")
+        if key is None:
+            raise InvalidKeyError('HMAC key is missing the "k" parameter')
+
+        key_bytes = base64url_decode(key)
         if len(key_bytes) == 0:
             raise InvalidKeyError("HMAC key must not be empty.")
         return key_bytes

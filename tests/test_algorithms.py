@@ -1,6 +1,6 @@
 import base64
 import json
-from typing import Callable, Union, cast
+from typing import Any, Callable, Union, cast
 
 import pytest
 
@@ -174,6 +174,28 @@ class TestAlgorithms:
 
         with pytest.raises(InvalidKeyError, match="must not be empty"):
             algo.from_jwk({"kty": "oct", "k": ""})
+
+    @pytest.mark.parametrize(
+        "jwk_data",
+        [
+            {"kty": "oct"},
+            {"kty": "oct", "kid": "keyid"},
+            {"kty": "oct", "k": None},
+        ],
+    )
+    def test_hmac_from_jwk_should_reject_missing_k_parameter(
+        self, jwk_data: dict[str, Any]
+    ) -> None:
+        # A missing or null `k` must surface as InvalidKeyError (the
+        # library's exception contract), not an uncaught KeyError, so a
+        # single malformed member of a JWK Set can be skipped in isolation.
+        algo = HMACAlgorithm(HMACAlgorithm.SHA256)
+
+        with pytest.raises(InvalidKeyError, match='"k" parameter'):
+            algo.from_jwk(jwk_data)
+
+        with pytest.raises(InvalidKeyError, match='"k" parameter'):
+            algo.from_jwk(json.dumps(jwk_data))
 
     @pytest.mark.parametrize("empty_key", ["", b""])
     def test_hmac_prepare_key_rejects_empty_key(

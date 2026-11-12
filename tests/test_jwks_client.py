@@ -344,6 +344,30 @@ class TestPyJWKClient:
         assert isinstance(exc.value.__cause__, RecursionError)
         assert open_mock.call_count == 0
 
+    def test_malformed_key_member_is_isolated_and_jwks_is_fetched_once(self) -> None:
+        # Regression: a single malformed member (an `oct` key without its
+        # `k` parameter) used to raise an uncaught KeyError while parsing the
+        # JWK Set. The exception aborted the fetch before the cache was
+        # populated, so every authentication request re-fetched the remote
+        # endpoint and failed outright instead of using the remaining keys.
+        url = "https://dev-87evx9ru.auth0.com/.well-known/jwks.json"
+        kid = "NEE1QURBOTM4MzI5RkFDNTYxOTU1MDg2ODgwQ0UzMTk1QjYyRkRFQw"
+
+        response_data = copy.deepcopy(RESPONSE_DATA_WITH_MATCHING_KID)
+        response_data["keys"].insert(
+            0, {"kty": "oct", "kid": "malformed-hmac", "use": "sig"}
+        )
+
+        jwks_client = PyJWKClient(url)
+        with mocked_success_response(response_data) as open_mock:
+            for _ in range(3):
+                signing_key = jwks_client.get_signing_key(kid)
+                assert signing_key.key_id == kid
+
+        assert open_mock.call_count == 1
+        assert jwks_client.jwk_set_cache is not None
+        assert jwks_client.jwk_set_cache.get() is not None
+
     def test_get_jwk_set_caches_result(self) -> None:
         url = "https://dev-87evx9ru.auth0.com/.well-known/jwks.json"
 
